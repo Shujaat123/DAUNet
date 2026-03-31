@@ -98,7 +98,7 @@ def main():
     dataset_name = cfg.get("dataset", "PSFH")
     if dataset_name == "PSFH":
         dataroot = "/home/muhammad_jabbar/diffusion/code/Fast-DDPM/data/Pubic_Symphysis_Fetal_Head_Segmentation_and_Angle_of_Progression"
-        ds = PUBIC(dataroot, cfg["img_size"], split=args.split)
+        ds = PUBIC(dataroot, cfg["img_size"], cfg["n_channels"], split=args.split)
         n_classes = cfg["n_classes"]
     else:
         raise ValueError(dataset_name)

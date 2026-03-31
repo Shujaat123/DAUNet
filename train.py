@@ -54,7 +54,7 @@ def parse_args():
     p.add_argument("--model", type=str, default="daunet", choices=["daunet",],
         help="Model variant to use: 'daunet' (Deformable-UNet).")
     p.add_argument("--n-channels", type=int, default=3,
-        help="Number of input channels (default 3 for 3-slice input).")
+        help="Number of input channels [1, 3] (default 3 for 3-slice input).")
     p.add_argument("--n-classes", type=int, default=3,
         help="For PUBIC (PSFH) dataset only: Number of segmentation classes (e.g., 3 for {0,1,2}).")
     p.add_argument("--base", type=int, default=64,
@@ -127,15 +127,15 @@ logger.info(f"Device: {device}")
 if args.dataset == "PSFH":
     args.dataroot = '/home/muhammad_jabbar/diffusion/code/Fast-DDPM/data/Pubic_Symphysis_Fetal_Head_Segmentation_and_Angle_of_Progression'
     if args.val_split == "train":
-        train_ds = PUBIC(args.dataroot, args.img_size, split="train", augment=args.augment)
-        val_ds   = PUBIC(args.dataroot, args.img_size, split="train")
+        train_ds = PUBIC(args.dataroot, args.img_size, split="train", num_channels=args.n_channels, augment=args.augment)
+        val_ds   = PUBIC(args.dataroot, args.img_size, split="train", num_channels=args.n_channels)
         logger.info("Using 'train' split for both training and validation.")
     elif args.val_split == "test":
-        train_ds = PUBIC(args.dataroot, args.img_size, split="train", augment=args.augment)
-        val_ds   = PUBIC(args.dataroot, args.img_size, split="test")
+        train_ds = PUBIC(args.dataroot, args.img_size, split="train", num_channels=args.n_channels, augment=args.augment)
+        val_ds   = PUBIC(args.dataroot, args.img_size, split="test", num_channels=args.n_channels)
         logger.info("Using 'test' split for validation.")
     elif args.val_split == "train8020":
-        base_train = PUBIC(args.dataroot, args.img_size, split="train", augment=False) # base dataset WITHOUT augmentation for stable indexing
+        base_train = PUBIC(args.dataroot, args.img_size, split="train", num_channels=args.n_channels, augment=False) # base dataset WITHOUT augmentation for stable indexing
         n = len(base_train)
         n_val = max(1, int(round(0.2 * n)))
         # Deterministic shuffle
@@ -144,8 +144,8 @@ if args.dataset == "PSFH":
         val_idx   = perm[:n_val]
         train_idx = perm[n_val:]
         # Two *separate* dataset instances from train, with no val augmentation:
-        train_ds = Subset(PUBIC(args.dataroot, args.img_size, split="train", augment=args.augment), train_idx)
-        val_ds   = Subset(PUBIC(args.dataroot, args.img_size, split="train"), val_idx)
+        train_ds = Subset(PUBIC(args.dataroot, args.img_size, split="train", num_channels=args.n_channels, augment=args.augment), train_idx)
+        val_ds   = Subset(PUBIC(args.dataroot, args.img_size, split="train", num_channels=args.n_channels), val_idx)
         logger.info("Using 'train' sub-split for training (80pc) and validation(20pc).")
     # elif args.val_split == "nl_train8020": # no data leakage train8020: train split into 80pc for train & 20pc for validation with split by case/patient
     else:
@@ -241,9 +241,6 @@ for epoch in range(start_epoch, args.epochs + 1):
         f"per_class {['%.3f' % d for d in val['per_class_dice']]} | val_meanDice_foreground {fg_mean:.4f} | lr={current_lr:.6f}"
     )
 
-    # Save latest
-    save_ckpt(latest, model, optimizer, epoch, best_metric, vars(args))
-
     # improved = (val["mean_dice"] > best_metric + args.min_delta) # based on all-class mean
     improved = (monitor_metric > best_metric + args.min_delta) # based on val_meanDice_foreground
     if improved:
@@ -255,6 +252,9 @@ for epoch in range(start_epoch, args.epochs + 1):
     else:
         epochs_since_improve += 1
         logger.info(f"No improvement. patience {epochs_since_improve}/{args.patience}")
+
+    # Save latest
+    save_ckpt(latest, model, optimizer, epoch, best_metric, vars(args))
 
     logger.info(f"Epoch {epoch:03d} time: {time.time()-t0:.1f}s | lr={optimizer.param_groups[0]['lr']:.6f}")
 
@@ -275,7 +275,7 @@ if bool(args.eval):
     logger.info("Running evaluate_PFSH_comprehensive.py on best checkpoint...")
     try:
         subprocess.run(
-            [sys.executable, "evaluate_PFSH_comprehensive.py", "--log-dir", str(args.out_dir)],
+            [sys.executable, "evaluate_PFSH_comprehensive.py", "--log_dir", str(args.out_dir)],
             check=True
         )
     except Exception as e:

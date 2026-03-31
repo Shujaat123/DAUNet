@@ -14,10 +14,14 @@ def normalize_img(img):
 
 class PUBIC(Dataset):
     # def __init__(self, dataroot, img_size, split='train', augment=False, data_len=-1):
-    def __init__(self, dataroot, img_size, split='train', augment=False):
+    def __init__(self, dataroot, img_size, split='train', num_channels=3, augment=False):
         self.img_size = img_size
         self.split = split
         self.augment = augment and (split == "train")
+        self.num_channels = num_channels
+
+        if self.num_channels not in (1, 3):
+            raise ValueError(f"num_channels must be 1 or 3, got {self.num_channels}")
 
         img_root = os.path.join(dataroot, self.split+'dataset/image_mha/')
         gt_root = os.path.join(dataroot, self.split+'dataset/label_mha/')
@@ -45,12 +49,19 @@ class PUBIC(Dataset):
         label_array = sitk.GetArrayFromImage(label_vol).astype(np.uint8)  # [H,W], values 0/1/2
 
         # --- Resize and normalize image slices
-        img_tensor = []
-        for i in range(3):
-            img_slice = Image.fromarray(img_array[i]).resize((self.img_size, self.img_size), resample=Image.BILINEAR)
-            img_slice_np = np.array(img_slice).astype(np.float32) / 255.0  # [0, 1]
-            img_tensor.append(torch.from_numpy(img_slice_np * 2.0 - 1.0))  # [0,1] → [-1,1]
-        img = torch.stack(img_tensor, dim=0)  # shape: [3, H, W]
+        if self.num_channels == 3:
+            img_tensor = []
+            for i in range(3):
+                img_slice = Image.fromarray(img_array[i]).resize((self.img_size, self.img_size), resample=Image.BILINEAR)
+                img_slice_np = np.array(img_slice).astype(np.float32) / 255.0  # [0, 1]
+                img_tensor.append(torch.from_numpy(img_slice_np * 2.0 - 1.0))  # [0,1] → [-1,1]
+            img = torch.stack(img_tensor, dim=0)  # shape: [3, H, W]
+
+        else:  # self.num_channels == 1
+            center_idx = img_array.shape[0] // 2   # use middle slice
+            img_slice = Image.fromarray(img_array[center_idx]).resize((self.img_size, self.img_size), resample=Image.BILINEAR)
+            img_slice_np = np.array(img_slice).astype(np.float32) / 255.0
+            img = torch.from_numpy(img_slice_np * 2.0 - 1.0).unsqueeze(0)  # [1, H, W]
 
         # Resize label (NEAREST to preserve boundaries), convert to tensor
         label_img = Image.fromarray(label_array).resize((self.img_size, self.img_size), resample=Image.NEAREST)
@@ -67,7 +78,7 @@ class PUBIC(Dataset):
 
 
 def _geom_augment(img, mask):
-    # img: torch.FloatTensor [3,H,W] in [-1,1]; mask: torch.LongTensor [H,W]
+    # img: torch.FloatTensor [C,H,W] in [-1,1]; mask: torch.LongTensor [H,W]
     import random
     if random.random() < 0.5:
         img  = TF.hflip(img);  mask = TF.hflip(mask)
