@@ -33,7 +33,6 @@ Our model shows superior performance in segmenting complex anatomical structures
 We evaluate DAUNet on:
 
 1. **FH-PS-AoP**: Fetal head and pubic symphysis segmentation from transperineal ultrasound  
-   → Dataset URL: *[Will be added by user]*
 
 2. **FUMPE**: Pulmonary embolism segmentation from CT angiography  
    → Dataset URL: [https://www.severinalab.com/FUMPE](https://www.severinalab.com/FUMPE)
